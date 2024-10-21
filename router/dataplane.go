@@ -49,6 +49,7 @@ import (
 	"github.com/scionproto/scion/pkg/slayers/path/onehop"
 	"github.com/scionproto/scion/pkg/slayers/path/scion"
 	"github.com/scionproto/scion/pkg/spao"
+	"github.com/scionproto/scion/pkg/stun"
 	"github.com/scionproto/scion/private/drkey/drkeyutil"
 	"github.com/scionproto/scion/private/topology"
 	underlayconn "github.com/scionproto/scion/private/underlay/conn"
@@ -800,6 +801,20 @@ func (p *slowPathPacketProcessor) processPacket(pkt *Packet) error {
 	p.reset()
 	p.pkt = pkt
 
+	if stun.Is(pkt.RawPacket) {
+		txid, err := stun.ParseBindingRequest(pkt.RawPacket)
+		if err != nil {
+			return serrors.New("Error processing STUN packet", "error", err)
+		}
+		response := stun.Response(txid, pkt.SrcAddr.AddrPort())
+		p.pkt.RawPacket = p.pkt.RawPacket[:len(response)]
+		copy(p.pkt.RawPacket, response)
+		p.pkt.trafficType = ttOther
+		p.pkt.egress = p.pkt.Ingress
+		updateNetAddrFromNetAddr(p.pkt.DstAddr, p.pkt.SrcAddr)
+		return err
+	}
+
 	p.lastLayer, err = decodeLayers(pkt.RawPacket, &p.scionLayer, &p.hbhLayer, &p.e2eLayer)
 	if err != nil {
 		return err
@@ -892,6 +907,11 @@ func (p *scionPacketProcessor) processPkt(pkt *Packet) disposition {
 		return errorDiscard("error", err)
 	}
 	p.pkt = pkt
+
+	// Check if STUN packet
+	if stun.Is(p.pkt.RawPacket) {
+		return pSlowPath
+	}
 
 	// parse SCION header and skip extensions;
 	var err error
@@ -2518,3 +2538,31 @@ func updateNetAddrFromNetAddr(netAddr *net.UDPAddr, fromNetAddr *net.UDPAddr) {
 	netAddr.IP = netAddr.IP[0:len(fromNetAddr.IP)]
 	copy(netAddr.IP, fromNetAddr.IP)
 }
+
+/**
+// Check if packet is STUN packet
+func checkStun(pkt *packet) bool {
+	// STUN header length
+	if len(pkt.rawPacket) < 20 {
+		return false
+	}
+	// magic cookie 0x2112A442 = 554869826
+	magicCookieField := binary.BigEndian.Uint32(pkt.rawPacket[4:8])
+	if magicCookieField != uint32(554869826) {
+		return false
+	}
+	// first two bits must be 0
+	if pkt.rawPacket[0]&0b11000000 != 0 {
+		return false
+	}
+	fmt.Println(pkt.srcAddr)
+	return true
+}
+
+// Process STUN packet
+func processStun(pkt *packet) error {
+	if binary.BigEndian.Uint16(pkt.rawPacket[:2]) != uint16(1) {
+		return errors.New("STUN packet not a binding request")
+	}
+	return nil
+}**/
