@@ -2537,31 +2537,3 @@ func updateNetAddrFromNetAddr(netAddr *net.UDPAddr, fromNetAddr *net.UDPAddr) {
 	netAddr.IP = netAddr.IP[0:len(fromNetAddr.IP)]
 	copy(netAddr.IP, fromNetAddr.IP)
 }
-
-/**
-// Check if packet is STUN packet
-func checkStun(pkt *packet) bool {
-	// STUN header length
-	if len(pkt.rawPacket) < 20 {
-		return false
-	}
-	// magic cookie 0x2112A442 = 554869826
-	magicCookieField := binary.BigEndian.Uint32(pkt.rawPacket[4:8])
-	if magicCookieField != uint32(554869826) {
-		return false
-	}
-	// first two bits must be 0
-	if pkt.rawPacket[0]&0b11000000 != 0 {
-		return false
-	}
-	fmt.Println(pkt.srcAddr)
-	return true
-}
-
-// Process STUN packet
-func processStun(pkt *packet) error {
-	if binary.BigEndian.Uint16(pkt.rawPacket[:2]) != uint16(1) {
-		return errors.New("STUN packet not a binding request")
-	}
-	return nil
-}**/
