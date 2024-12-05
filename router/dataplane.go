@@ -925,15 +925,15 @@ func (p *slowPathPacketProcessor) processPacket(pkt *Packet) error {
 		if stun.Is(pkt.rawPacket) {
 			txid, err := stun.ParseBindingRequest(pkt.rawPacket)
 			if err != nil {
-				return serrors.New("Error processing STUN packet", "error", err)
+				return serrors.Wrap("processing STUN packet", err)
 			}
-			response := stun.Response(txid, pkt.srcAddr.AddrPort())
-			p.pkt.rawPacket = p.pkt.rawPacket[:len(response)]
-			copy(p.pkt.rawPacket, response)
+			resp := stun.Response(txid, pkt.srcAddr.AddrPort())
+			p.pkt.rawPacket = p.pkt.rawPacket[:len(resp)]
+			copy(p.pkt.rawPacket, resp)
 			p.pkt.trafficType = ttOther
 			p.pkt.egress = p.pkt.ingress
 			updateNetAddrFromNetAddr(p.pkt.dstAddr, p.pkt.srcAddr)
-			return err
+			return nil
 		}
 		return err
 	}
@@ -1157,7 +1157,7 @@ func (p *scionPacketProcessor) processPkt(pkt *Packet) disposition {
 	p.lastLayer, err = decodeLayers(pkt.rawPacket, &p.scionLayer, &p.hbhLayer, &p.e2eLayer)
 
 	if err != nil {
-		// Check if STUN packet
+		// Check for STUN packet
 		if stun.Is(p.pkt.rawPacket) {
 			return pSlowPath
 		}
