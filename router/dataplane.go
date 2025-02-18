@@ -932,7 +932,7 @@ func (p *slowPathPacketProcessor) processPacket(pkt *Packet) error {
 			copy(p.pkt.rawPacket, resp)
 			p.pkt.trafficType = ttOther
 			p.pkt.egress = p.pkt.ingress
-			updateNetAddrFromNetAddr(p.pkt.dstAddr, p.pkt.srcAddr)
+			updateNetAddrFromNetAddr(p.pkt.DstAddr, p.pkt.srcAddr)
 			return nil
 		}
 		return err
