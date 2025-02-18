@@ -50,6 +50,7 @@ import (
 	"github.com/scionproto/scion/pkg/slayers/path/onehop"
 	"github.com/scionproto/scion/pkg/slayers/path/scion"
 	"github.com/scionproto/scion/pkg/spao"
+	"github.com/scionproto/scion/pkg/stun"
 	"github.com/scionproto/scion/private/drkey/drkeyutil"
 	"github.com/scionproto/scion/private/topology"
 	underlayconn "github.com/scionproto/scion/private/underlay/conn"
@@ -920,6 +921,20 @@ func (p *slowPathPacketProcessor) processPacket(pkt *Packet) error {
 
 	p.lastLayer, err = decodeLayers(pkt.rawPacket, &p.scionLayer, &p.hbhLayer, &p.e2eLayer)
 	if err != nil {
+		// Check for and process STUN packet
+		if stun.Is(pkt.rawPacket) {
+			txid, err := stun.ParseBindingRequest(pkt.rawPacket)
+			if err != nil {
+				return serrors.Wrap("processing STUN packet", err)
+			}
+			resp := stun.Response(txid, pkt.srcAddr.AddrPort())
+			p.pkt.rawPacket = p.pkt.rawPacket[:len(resp)]
+			copy(p.pkt.rawPacket, resp)
+			p.pkt.trafficType = ttOther
+			p.pkt.egress = p.pkt.ingress
+			updateNetAddrFromNetAddr(p.pkt.DstAddr, p.pkt.srcAddr)
+			return nil
+		}
 		return err
 	}
 	pathType := p.scionLayer.PathType
@@ -1140,7 +1155,12 @@ func (p *scionPacketProcessor) processPkt(pkt *Packet) disposition {
 	// parse SCION header and skip extensions;
 	var err error
 	p.lastLayer, err = decodeLayers(pkt.rawPacket, &p.scionLayer, &p.hbhLayer, &p.e2eLayer)
+
 	if err != nil {
+		// Check for STUN packet
+		if stun.Is(p.pkt.rawPacket) {
+			return pSlowPath
+		}
 		return errorDiscard("error", err)
 	}
 
